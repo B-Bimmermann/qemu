@@ -154,6 +154,7 @@ static inline void tswap64s(uint64_t *s)
 /* MMU memory access macros */
 
 #if defined(CONFIG_USER_ONLY)
+#include <assert.h>
 #include "exec/user/abitypes.h"
 
 /* On some host systems the guest address space is reserved on the host.
@@ -264,6 +265,8 @@ CPUArchState *cpu_copy(CPUArchState *env);
      | CPU_INTERRUPT_TGT_EXT_2   \
      | CPU_INTERRUPT_TGT_EXT_3   \
      | CPU_INTERRUPT_TGT_EXT_4)
+
+int interrupt(uint8_t vec); // TODO: move this to app. header
 
 #if !defined(CONFIG_USER_ONLY)
 

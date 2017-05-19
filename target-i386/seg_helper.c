@@ -68,6 +68,16 @@
 #undef MEMSUFFIX
 #endif
 
+extern uint64_t qsim_locked_addr;
+extern bool atomic_flag;
+extern int atomic_locked;
+extern uint64_t atomic_addr;
+extern int nonatomic_locked;
+
+#include "qsim-vm.h"
+
+extern int_cb_t     qsim_int_cb;
+extern int qsim_id;
 /* return non zero if error */
 static inline int load_segment_ra(CPUX86State *env, uint32_t *e1_ptr,
                                uint32_t *e2_ptr, int selector,
@@ -1192,6 +1202,8 @@ static void handle_even_inj(CPUX86State *env, int intno, int is_int,
 }
 #endif
 
+extern int qsim_gen_callbacks;
+
 /*
  * Begin execution of an interruption. is_int is TRUE if coming from
  * the int instruction. next_eip is the env->eip value AFTER the interrupt
@@ -1201,6 +1213,18 @@ static void do_interrupt_all(X86CPU *cpu, int intno, int is_int,
                              int error_code, target_ulong next_eip, int is_hw)
 {
     CPUX86State *env = &cpu->env;
+    CPUState *cs = CPU(x86_env_get_cpu(env));
+    qsim_id = cs->cpu_index;
+
+    if (atomic_flag) helper_unlock();
+    if (nonatomic_locked) {
+        nonatomic_locked = 0;
+    }
+
+    if (qsim_gen_callbacks && qsim_int_cb != NULL && qsim_int_cb(qsim_id, intno) && is_int) {
+        env->eip = next_eip;
+        return;
+    }
 
     if (qemu_loglevel_mask(CPU_LOG_INT)) {
         if ((env->cr[0] & CR0_PE_MASK)) {
@@ -1378,6 +1402,80 @@ bool x86_cpu_exec_interrupt(CPUState *cs, int interrupt_request)
 
     return ret;
 }
+
+void helper_enter_level(CPUX86State *env, int level, int data32,
+                        target_ulong t1)
+{
+    target_ulong ssp;
+    uint32_t esp_mask, esp, ebp;
+
+    esp_mask = get_sp_mask(env->segs[R_SS].flags);
+    ssp = env->segs[R_SS].base;
+    ebp = env->regs[R_EBP];
+    esp = env->regs[R_ESP];
+    if (data32) {
+        /* 32 bit */
+        esp -= 4;
+        while (--level) {
+            esp -= 4;
+            ebp -= 4;
+            cpu_stl_data_ra(env, ssp + (esp & esp_mask),
+                            cpu_ldl_data_ra(env, ssp + (ebp & esp_mask),
+                                            GETPC()),
+                            GETPC());
+        }
+        esp -= 4;
+        cpu_stl_data_ra(env, ssp + (esp & esp_mask), t1, GETPC());
+    } else {
+        /* 16 bit */
+        esp -= 2;
+        while (--level) {
+            esp -= 2;
+            ebp -= 2;
+            cpu_stw_data_ra(env, ssp + (esp & esp_mask),
+                            cpu_lduw_data_ra(env, ssp + (ebp & esp_mask),
+                                             GETPC()),
+                            GETPC());
+        }
+        esp -= 2;
+        cpu_stw_data_ra(env, ssp + (esp & esp_mask), t1, GETPC());
+    }
+}
+
+#ifdef TARGET_X86_64
+void helper_enter64_level(CPUX86State *env, int level, int data64,
+                          target_ulong t1)
+{
+    target_ulong esp, ebp;
+
+    ebp = env->regs[R_EBP];
+    esp = env->regs[R_ESP];
+
+    if (data64) {
+        /* 64 bit */
+        esp -= 8;
+        while (--level) {
+            esp -= 8;
+            ebp -= 8;
+            cpu_stq_data_ra(env, esp, cpu_ldq_data_ra(env, ebp, GETPC()),
+                            GETPC());
+        }
+        esp -= 8;
+        cpu_stq_data_ra(env, esp, t1, GETPC());
+    } else {
+        /* 16 bit */
+        esp -= 2;
+        while (--level) {
+            esp -= 2;
+            ebp -= 2;
+            cpu_stw_data_ra(env, esp, cpu_lduw_data_ra(env, ebp, GETPC()),
+                            GETPC());
+        }
+        esp -= 2;
+        cpu_stw_data_ra(env, esp, t1, GETPC());
+    }
+}
+#endif
 
 void helper_lldt(CPUX86State *env, int selector)
 {

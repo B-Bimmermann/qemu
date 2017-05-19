@@ -116,6 +116,38 @@ compile_prog() {
   do_cc $QEMU_CFLAGS $local_cflags -o $TMPE $TMPC $LDFLAGS $local_ldflags
 }
 
+do_libtool() {
+    local mode=$1
+    shift
+    # Run the compiler, capturing its output to the log.
+    echo $libtool $mode --tag=CC $cc "$@" >> config.log
+    $libtool $mode --tag=CC $cc "$@" >> config.log 2>&1 || return $?
+    # Test passed. If this is an --enable-werror build, rerun
+    # the test with -Werror and bail out if it fails. This
+    # makes warning-generating-errors in configure test code
+    # obvious to developers.
+    if test "$werror" != "yes"; then
+        return 0
+    fi
+    # Don't bother rerunning the compile if we were already using -Werror
+    case "$*" in
+        *-Werror*)
+           return 0
+        ;;
+    esac
+    echo $libtool $mode --tag=CC $cc -Werror "$@" >> config.log
+    $libtool $mode --tag=CC $cc -Werror "$@" >> config.log 2>&1 && return $?
+    error_exit "configure test passed without -Werror but failed with -Werror." \
+        "This is probably a bug in the configure script. The failing command" \
+        "will be at the bottom of config.log." \
+        "You can run configure with --disable-werror to bypass this check."
+}
+
+libtool_prog() {
+    do_libtool --mode=compile $QEMU_CFLAGS -c -fPIE -DPIE -o $TMPO $TMPC || return $?
+    do_libtool --mode=link $LDFLAGS -o $TMPA $TMPL -rpath /usr/local/lib
+}
+
 # symbolically link $1 to $2.  Portable version of "ln -sf".
 symlink() {
   rm -rf "$2"
@@ -393,8 +425,8 @@ QEMU_CFLAGS="-Wstrict-prototypes -Wredundant-decls $QEMU_CFLAGS"
 QEMU_CFLAGS="-D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE $QEMU_CFLAGS"
 QEMU_INCLUDES="-I. -I\$(SRC_PATH) -I\$(SRC_PATH)/include"
 if test "$debug_info" = "yes"; then
-    CFLAGS="-g $CFLAGS"
-    LDFLAGS="-g $LDFLAGS"
+    CFLAGS="-ggdb3 $CFLAGS"
+    LDFLAGS="-ggdb3 $LDFLAGS"
 fi
 
 # make source path absolute
@@ -4492,6 +4524,21 @@ if test "$fortify_source" != "no"; then
 fi
 
 ##########################################
+# check for sysmacros.h
+
+have_sysmacros=no
+cat > $TMPC << EOF
+#include <sys/sysmacros.h>
+int main(void) {
+    return makedev(0, 0);
+}
+EOF
+if compile_prog "" "" ; then
+    have_sysmacros=yes
+fi
+
+
+##########################################
 # check if struct fsxattr is available via linux/fs.h
 
 have_fsxattr=no
@@ -5441,6 +5488,10 @@ echo "CONFIG_TRACE_FILE=$trace_file" >> $config_host_mak
 
 if test "$rdma" = "yes" ; then
   echo "CONFIG_RDMA=y" >> $config_host_mak
+fi
+
+if test "$have_sysmacros" = "yes" ; then
+  echo "CONFIG_SYSMACROS=y" >> $config_host_mak
 fi
 
 # Hold two types of flag:
