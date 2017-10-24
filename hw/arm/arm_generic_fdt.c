@@ -28,6 +28,7 @@
 #include <libfdt.h>
 #include "hw/fdt_generic_util.h"
 #include "hw/fdt_generic_devices.h"
+#include "hw/boards.h"
 
 #ifndef ARM_GENERIC_FDT_DEBUG
 #define ARM_GENERIC_FDT_DEBUG 3
@@ -399,12 +400,13 @@ static memory_info init_memory(void *fdt, ram_addr_t ram_size, bool zynq_7000)
                                                      "qemu,ram", 0,
                                                      0, NULL);
 
-                    memory_region_init_ram(ram_region, NULL, region_name,
-                                           region_size, &error_fatal);
+                    memory_region_allocate_system_memory(ram_region, NULL, region_name,
+                                           region_size);
                     object_property_set_int(OBJECT(ram_region), ram_prop,
                                             "ram", &error_abort);
                     memory_region_add_subregion(container, region_start,
                                                 ram_region);
+                    //vmstate_register_ram_global(ram_region);
                 }
             } while (mem_offset > 0 && ram_size > mem_created);
         } else {
