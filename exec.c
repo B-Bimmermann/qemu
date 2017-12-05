@@ -3947,14 +3947,15 @@ void qemu_ram_block_name_print(void)
 
     fprintf(stderr,"***********************************\n");
     QLIST_FOREACH_RCU(block, &ram_list.blocks, next) {
-        fprintf(stderr,"Pos.: %3i Name: %-30s ",i,block->idstr);
-        fprintf(stderr, " used_length: 0x%"     PRIx64 " ", block->used_length);
-        fprintf(stderr, " page_size: 0x%"       PRIx64 " ", block->page_size);
-        fprintf(stderr, " max_length: 0x%"      PRIx64 " ", block->max_length);
-        fprintf(stderr, " offset: 0x%"          PRIx64 " ", block->offset);
-        fprintf(stderr, " fd: %i ", block->fd);
-        fprintf(stderr, " flags: %i ", block->flags);
-        fprintf(stderr, " max_length: 0x%" PRIx64 " ", block->max_length);
+        fprintf(stderr,"Pos.: %3i Name: %-30s "              ,i,block->idstr);
+        fprintf(stderr, " used_length: 0x%-10" PRIx64 " "    , block->used_length);
+        fprintf(stderr, " page_size: 0x%"   PRIx64 " "       , block->page_size);
+        fprintf(stderr, " max_length: 0x%-10"PRIx64 " "      , block->max_length);
+        fprintf(stderr, " offset: 0x%-10" PRIx64 " "         , block->offset);
+        fprintf(stderr, " fd: %2i "                          , block->fd);
+        fprintf(stderr, " flags: %2i "                       , block->flags);
+        fprintf(stderr, " RAM: %i "                          , block->mr->ram);
+        fprintf(stderr, " max_length: 0x%" PRIx64 " "        , block->max_length);
 
 
         fprintf(stderr,"\n") ;
